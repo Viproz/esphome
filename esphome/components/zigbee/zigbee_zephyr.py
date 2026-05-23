@@ -399,15 +399,17 @@ async def _add_zigbee_ep(
     hub = await cg.get_variable(config[CONF_ZIGBEE_ID])
     cg.add(var.set_parent(hub))
 
-
+bin_count = 0
 async def _add_binary_sensor(entity: cg.MockObj, config: ConfigType) -> None:
+    global bin_count
+    bin_count += 1
     await _add_zigbee_ep(
         entity,
         config,
         CONF_ZIGBEE_BINARY_SENSOR,
         BinaryAttrs,
         "ESPHOME_ZB_ZCL_DECLARE_BINARY_INPUT_ATTRIB_LIST",
-        ZB_ZCL_CLUSTER_ID_BINARY_INPUT,
+        f"0xFC0{bin_count:x}",
         "ZB_HA_SIMPLE_SENSOR_DEVICE_ID",
     )
 
