@@ -30,7 +30,6 @@ from .const_zephyr import (
     CONF_IEEE802154_VENDOR_OUI,
     CONF_SLEEPY,
     CONF_ZIGBEE_ID,
-    KEY_PENDING_CLUSTERS,
 )
 from .zigbee_esp32 import (
     final_validate_esp32,
@@ -126,8 +125,6 @@ def validate_number_of_ep(config: ConfigType) -> ConfigType:
         return config
     if KEY_ZIGBEE not in CORE.data:
         raise cv.Invalid("At least one zigbee device need to be included")
-    if not CORE.data[KEY_ZIGBEE].get(KEY_PENDING_CLUSTERS):
-        raise cv.Invalid("At least one zigbee device need to be included")
     return config
 
 
@@ -209,6 +206,10 @@ def consume_endpoint(config: ConfigType) -> ConfigType:
             config[CONF_NAME],
             config[CONF_NAME].replace(" ", "_"),
         )
+    # Ensure KEY_ZIGBEE exists in CORE.data so validate_number_of_ep can
+    # detect that at least one entity was declared.  The actual cluster list is
+    # accumulated later during code generation in zigbee_add_pending_cluster.
+    CORE.data.setdefault(KEY_ZIGBEE, {})
     return config
 
 
