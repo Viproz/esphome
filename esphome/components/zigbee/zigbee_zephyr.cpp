@@ -114,19 +114,21 @@ void ZigbeeComponent::zcl_device_cb(zb_bufid_t bufid) {
   ESP_LOGI(TAG, "%s id %hd, cluster_id %d, attr_id %d, endpoint: %d", __func__, device_cb_id, cluster_id, attr_id,
            endpoint);
 
-  /* Set default response value. */
-  p_device_cb_param->status = RET_OK;
-
   esphome::wake_loop_threadsafe();
 
-  // endpoints are enumerated from 1
-  if (global_zigbee->callbacks_.size() >= endpoint) {
-    const auto &cb = global_zigbee->callbacks_[endpoint - 1];
+  // Try each registered callback in order.  Each callback sets status to
+  // RET_NOT_IMPLEMENTED when the cluster_id does not match; we reset to RET_OK
+  // before every call so the callback has a clean slate to accept or decline.
+  for (const auto &cb : global_zigbee->callbacks_) {
     if (cb) {
+      p_device_cb_param->status = RET_OK;
       cb(bufid);
-      return;
+      if (p_device_cb_param->status != RET_NOT_IMPLEMENTED) {
+        return;  // handled
+      }
     }
   }
+
   p_device_cb_param->status = RET_NOT_IMPLEMENTED;
 }
 

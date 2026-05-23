@@ -28,10 +28,9 @@ from .const import (
 )
 from .const_zephyr import (
     CONF_IEEE802154_VENDOR_OUI,
-    CONF_MAX_EP_NUMBER,
     CONF_SLEEPY,
     CONF_ZIGBEE_ID,
-    KEY_EP_NUMBER,
+    KEY_PENDING_CLUSTERS,
 )
 from .zigbee_esp32 import (
     final_validate_esp32,
@@ -127,14 +126,8 @@ def validate_number_of_ep(config: ConfigType) -> ConfigType:
         return config
     if KEY_ZIGBEE not in CORE.data:
         raise cv.Invalid("At least one zigbee device need to be included")
-    count = len(CORE.data[KEY_ZIGBEE][KEY_EP_NUMBER])
-    if count == 1:
-        _LOGGER.warning(
-            "Single endpoint requires ZHA or at leatst Zigbee2MQTT 2.8.0. For older versions of Zigbee2MQTT use multiple endpoints"
-        )
-    if count > CONF_MAX_EP_NUMBER and not CORE.testing_mode:
-        raise cv.Invalid(f"Maximum number of end points is {CONF_MAX_EP_NUMBER}")
-
+    if not CORE.data[KEY_ZIGBEE].get(KEY_PENDING_CLUSTERS):
+        raise cv.Invalid("At least one zigbee device need to be included")
     return config
 
 
@@ -216,9 +209,6 @@ def consume_endpoint(config: ConfigType) -> ConfigType:
             config[CONF_NAME],
             config[CONF_NAME].replace(" ", "_"),
         )
-    data: dict[str, Any] = CORE.data.setdefault(KEY_ZIGBEE, {})
-    slots: list[str] = data.setdefault(KEY_EP_NUMBER, [])
-    slots.extend([""])
     return config
 
 

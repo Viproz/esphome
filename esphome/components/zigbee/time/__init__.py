@@ -11,11 +11,10 @@ from ..const_zephyr import CONF_ZIGBEE_ID
 from ..zigbee_zephyr import (
     ZigbeeClusterDesc,
     ZigbeeComponent,
-    get_slot_index,
+    get_entity_index,
+    zigbee_add_pending_cluster,
     zigbee_new_attr_list,
-    zigbee_new_cluster_list,
     zigbee_new_variable,
-    zigbee_register_ep,
 )
 
 DEPENDENCIES = ["zigbee"]
@@ -42,16 +41,13 @@ async def to_code(config: ConfigType) -> None:
 
 
 async def _add_time(config: ConfigType) -> None:
-    slot_index = get_slot_index()
+    entity_index = get_entity_index()
 
-    # Create unique names for this sensor's variables based on slot index
-    prefix = f"zigbee_ep{slot_index + 1}"
+    prefix = f"zigbee_ep1_e{entity_index}"
     attrs_name = f"{prefix}_time_attrs"
     attr_list_name = f"{prefix}_time_attrib_list"
-    cluster_list_name = f"{prefix}_cluster_list"
-    ep_name = f"{prefix}_ep"
 
-    # Create the binary attributes structure
+    # Create the time attributes structure and attribute list
     time_attrs = zigbee_new_variable(attrs_name, "zb_zcl_time_attrs_t")
     attr_list = zigbee_new_attr_list(
         attr_list_name,
@@ -59,20 +55,10 @@ async def _add_time(config: ConfigType) -> None:
         str(time_attrs),
     )
 
-    # Create cluster list and register endpoint
-    cluster_list_name, clusters = zigbee_new_cluster_list(
-        cluster_list_name,
-        [
-            ZigbeeClusterDesc("ZB_ZCL_CLUSTER_ID_TIME", attr_list),
-            ZigbeeClusterDesc("ZB_ZCL_CLUSTER_ID_TIME"),
-        ],
-    )
-    zigbee_register_ep(
-        ep_name,
-        cluster_list_name,
-        0,
-        clusters,
-        slot_index,
+    # Accumulate the time cluster into the shared endpoint
+    zigbee_add_pending_cluster(
+        ZigbeeClusterDesc("ZB_ZCL_CLUSTER_ID_TIME", attr_list),
+        0,  # time cluster has no reportable attributes
         "ZB_HA_CUSTOM_ATTR_DEVICE_ID",
     )
 
@@ -81,7 +67,7 @@ async def _add_time(config: ConfigType) -> None:
     await time_.register_time(var, config)
     await cg.register_component(var, config)
 
-    cg.add(var.set_endpoint(slot_index + 1))
+    cg.add(var.set_endpoint(1))
     cg.add(var.set_cluster_attributes(time_attrs))
     hub = await cg.get_variable(config[CONF_ZIGBEE_ID])
     cg.add(var.set_parent(hub))

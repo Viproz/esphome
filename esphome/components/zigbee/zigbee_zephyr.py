@@ -41,7 +41,7 @@ from .const_zephyr import (
     CONF_ZIGBEE_NUMBER,
     CONF_ZIGBEE_SENSOR,
     CONF_ZIGBEE_SWITCH,
-    KEY_EP_NUMBER,
+    KEY_PENDING_CLUSTERS,
     ZB_ZCL_BASIC_ATTRS_EXT_T,
     ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
     ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
@@ -267,37 +267,59 @@ def zigbee_new_cluster_list(
     return (name, all_clusters)
 
 
-def zigbee_register_ep(
-    ep_name: str,
-    cluster_list_name: str,
+def get_entity_index() -> int:
+    """Return the index (0-based) of the next entity being registered, for unique naming."""
+    data: dict = CORE.data.setdefault(KEY_ZIGBEE, {})
+    return len(data.get(KEY_PENDING_CLUSTERS, []))
+
+
+def zigbee_add_pending_cluster(
+    cluster_desc: "ZigbeeClusterDesc",
     report_attr_count: int,
-    clusters: list[ZigbeeClusterDesc],
-    slot_index: int,
     app_device_id: str,
 ) -> None:
-    """Register a Zigbee endpoint."""
-    in_cluster_num = sum(1 for c in clusters if c.has_attrs)
-    out_cluster_num = len(clusters) - in_cluster_num
-    cluster_ids = [c.cluster_id for c in clusters]
+    """Accumulate a cluster for the single shared endpoint.
 
-    # Store endpoint name for device context generation
-    CORE.data[KEY_ZIGBEE][KEY_EP_NUMBER][slot_index] = ep_name
-
-    # Generate the endpoint declaration
-    ep_id = slot_index + 1  # Endpoints are 1-indexed
-    obj = cg.RawExpression(
-        f"ESPHOME_ZB_HA_DECLARE_EP({ep_name}, {ep_id}, {cluster_list_name}, "
-        f"{in_cluster_num}, {out_cluster_num}, {report_attr_count}, {app_device_id}, {', '.join(cluster_ids)})"
-    )
-    CORE.add_global(obj)
+    The cluster list and endpoint declaration are emitted in _ctx_to_code once
+    all entities have registered their clusters.
+    """
+    data: dict = CORE.data.setdefault(KEY_ZIGBEE, {})
+    pending: list = data.setdefault(KEY_PENDING_CLUSTERS, [])
+    pending.append((cluster_desc, report_attr_count, app_device_id))
 
 
 @coroutine_with_priority(CoroPriority.LATE)
 async def _ctx_to_code(config: ConfigType) -> None:
-    cg.add_define("ZIGBEE_ENDPOINTS_COUNT", len(CORE.data[KEY_ZIGBEE][KEY_EP_NUMBER]))
+    pending = CORE.data[KEY_ZIGBEE][KEY_PENDING_CLUSTERS]
+
+    # Collect all entity clusters and sum their reportable attribute counts.
+    # The app_device_id is taken from the first registered entity.
+    entity_clusters = [entry[0] for entry in pending]
+    total_report_attr_count = sum(entry[1] for entry in pending)
+    app_device_id = pending[0][2]
+
+    cluster_list_name, clusters = zigbee_new_cluster_list(
+        "zigbee_ep1_cluster_list", entity_clusters
+    )
+
+    # Emit the single endpoint declaration
+    ep_name = "zigbee_ep1"
+    in_cluster_num = sum(1 for c in clusters if c.has_attrs)
+    out_cluster_num = len(clusters) - in_cluster_num
+    cluster_ids = [c.cluster_id for c in clusters]
+    CORE.add_global(
+        cg.RawExpression(
+            f"ESPHOME_ZB_HA_DECLARE_EP({ep_name}, 1, {cluster_list_name}, "
+            f"{in_cluster_num}, {out_cluster_num}, {total_report_attr_count}, "
+            f"{app_device_id}, {', '.join(cluster_ids)})"
+        )
+    )
+
+    # Device context: always a single endpoint
+    cg.add_define("ZIGBEE_ENDPOINTS_COUNT", 1)
     cg.add_global(
         cg.RawExpression(
-            f"ZBOSS_DECLARE_DEVICE_CTX_EP_VA(zb_device_ctx, &{', &'.join(CORE.data[KEY_ZIGBEE][KEY_EP_NUMBER])})"
+            f"ZBOSS_DECLARE_DEVICE_CTX_EP_VA(zb_device_ctx, &{ep_name})"
         )
     )
     cg.add(cg.RawExpression("ZB_AF_REGISTER_DEVICE_CTX(&zb_device_ctx)"))
@@ -325,18 +347,6 @@ async def zephyr_setup_number(
     CORE.add_job(_add_number, entity, config, min_value, max_value, step)
 
 
-def get_slot_index() -> int:
-    """Find the next available endpoint slot."""
-    slot = next(
-        (i for i, v in enumerate(CORE.data[KEY_ZIGBEE][KEY_EP_NUMBER]) if v == ""), None
-    )
-    if slot is None:
-        raise cv.Invalid(
-            f"No available Zigbee endpoint slots ({len(CORE.data[KEY_ZIGBEE][KEY_EP_NUMBER])} in use)"
-        )
-    return slot
-
-
 async def _add_zigbee_ep(
     entity: cg.MockObj,
     config: ConfigType,
@@ -347,46 +357,43 @@ async def _add_zigbee_ep(
     app_device_id: str,
     extra_field_values: dict[str, int] | None = None,
 ) -> None:
-    slot_index = get_slot_index()
+    # Use entity count as a stable index for unique C symbol names.
+    entity_index = get_entity_index()
 
-    prefix = f"zigbee_ep{slot_index + 1}"
+    prefix = f"zigbee_ep1_e{entity_index}"
     attrs_name = f"{prefix}_attrs"
     attr_list_name = f"{prefix}_attrib_list"
-    cluster_list_name = f"{prefix}_cluster_list"
-    ep_name = f"{prefix}_ep"
 
-    # Create attribute struct
+    # Create attribute struct and list.  These must be emitted now (before any
+    # coroutine yield) so they appear in the global scope before the cluster list
+    # that references them, which is emitted later in _ctx_to_code.
     attrs = zigbee_new_variable(attrs_name, attrs_type)
 
-    # Build attribute list args
     attr_args = [
         zigbee_assign(attrs.out_of_service, 0),
         zigbee_assign(attrs.present_value, 0),
         zigbee_assign(attrs.status_flags, 0),
     ]
-    # Add extra field assignments (e.g., engineering_units for sensors)
     if extra_field_values:
         for field_name, value in extra_field_values.items():
             attr_args.append(zigbee_assign(getattr(attrs, field_name), value))
     attr_args.append(zigbee_set_string(attrs.description, config[CONF_NAME]))
 
-    # Create attribute list
     attr_list = zigbee_new_attr_list(attr_list_name, zcl_macro, *attr_args)
 
-    # Create cluster list and register endpoint
-    cluster_list_name, clusters = zigbee_new_cluster_list(
-        cluster_list_name,
-        [ZigbeeClusterDesc(cluster_id, attr_list)],
-    )
-    zigbee_register_ep(
-        ep_name, cluster_list_name, 2, clusters, slot_index, app_device_id
+    # Accumulate cluster descriptor for the single shared endpoint.
+    # The endpoint declaration itself is emitted in _ctx_to_code.
+    zigbee_add_pending_cluster(
+        ZigbeeClusterDesc(cluster_id, attr_list),
+        2,  # report_attr_count: present_value + status_flags
+        app_device_id,
     )
 
-    # Create ESPHome component
+    # All entities share the single endpoint 1.
     var = cg.new_Pvariable(config[component_key], entity)
     await cg.register_component(var, {})
 
-    cg.add(var.set_endpoint(slot_index + 1))
+    cg.add(var.set_endpoint(1))
     cg.add(var.set_cluster_attributes(attrs))
 
     hub = await cg.get_variable(config[CONF_ZIGBEE_ID])

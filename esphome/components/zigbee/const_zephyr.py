@@ -1,4 +1,3 @@
-CONF_MAX_EP_NUMBER = 8
 CONF_ZIGBEE_ID = "zigbee_id"
 CONF_ZIGBEE_BINARY_SENSOR = "zigbee_binary_sensor"
 CONF_ZIGBEE_SENSOR = "zigbee_sensor"
@@ -8,7 +7,8 @@ CONF_SLEEPY = "sleepy"
 CONF_IEEE802154_VENDOR_OUI = "ieee802154_vendor_oui"
 
 # Keys for CORE.data storage
-KEY_EP_NUMBER = "ep_number"
+# Each entry: (ZigbeeClusterDesc, report_attr_count: int, app_device_id: str)
+KEY_PENDING_CLUSTERS = "pending_clusters"
 
 # External ZBOSS SDK types (just strings for codegen)
 ZB_ZCL_BASIC_ATTRS_EXT_T = "zb_zcl_basic_attrs_ext_t"

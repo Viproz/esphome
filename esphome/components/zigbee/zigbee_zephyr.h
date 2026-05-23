@@ -3,6 +3,7 @@
 #if defined(USE_ZIGBEE) && defined(USE_NRF52)
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
+#include <vector>
 extern "C" {
 #include <zboss_api.h>
 #include <zboss_api_addons.h>
@@ -70,9 +71,11 @@ class ZigbeeComponent : public Component {
  public:
   void setup() override;
   void dump_config() override;
-  void add_callback(zb_uint8_t endpoint, std::function<void(zb_bufid_t bufid)> &&cb) {
-    // endpoints are enumerated from 1
-    this->callbacks_[endpoint - 1] = std::move(cb);
+  // The endpoint parameter is accepted for API compatibility but all entities
+  // share the single endpoint 1; callbacks are dispatched by cluster_id inside
+  // each entity's zcl_device_cb_ implementation.
+  void add_callback(zb_uint8_t /*endpoint*/, std::function<void(zb_bufid_t bufid)> &&cb) {
+    this->callbacks_.push_back(std::move(cb));
   }
   template<typename F> void add_on_join_callback(F &&cb) { this->join_cb_.add(std::forward<F>(cb)); }
   void zboss_signal_handler_esphome(zb_bufid_t bufid);
@@ -89,7 +92,7 @@ class ZigbeeComponent : public Component {
   void erase_flash_(int area);
 #endif
   void dump_reporting_();
-  std::array<std::function<void(zb_bufid_t bufid)>, ZIGBEE_ENDPOINTS_COUNT> callbacks_{};
+  std::vector<std::function<void(zb_bufid_t bufid)>> callbacks_{};
   CallbackManager<void(bool)> join_cb_;
   bool force_report_{false};
   uint32_t sleep_time_{};
