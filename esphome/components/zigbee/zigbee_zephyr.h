@@ -44,6 +44,16 @@ extern "C" {
                               (zb_af_simple_desc_1_1_t *) &simple_desc_##ep_name, report_attr_count, \
                               reporting_info##ep_name, 0, NULL)
 
+// Cluster revision for all ESPHome manufacturer-specific clusters.
+// ⚠ Used with ZB_ZCL_START_DECLARE_ATTRIB_LIST_CLUSTER_REVISION(attr_list, ESPHOME_CUSTOM).
+// This assumes the ZBOSS macro concatenates its second argument with _CLUSTER_REVISION_DEFAULT.
+// If compilation fails here, replace ESPHOME_CUSTOM with a cluster name whose revision
+// is already defined by the ZBOSS SDK (e.g. ZB_ZCL_ANALOG_INPUT).
+#define ESPHOME_CUSTOM_CLUSTER_REVISION_DEFAULT ((zb_uint16_t) 0x0001u)
+
+// Attribute ID for present_value — same across all ESPHome custom clusters.
+#define ESPHOME_ZCL_ATTR_PRESENT_VALUE_ID ((zb_uint16_t) 0x0055)
+
 namespace esphome::zigbee {
 
 struct BinaryAttrs {
@@ -104,9 +114,11 @@ class ZigbeeEntity {
  public:
   void set_parent(ZigbeeComponent *parent) { this->parent_ = parent; }
   void set_endpoint(zb_uint8_t endpoint) { this->endpoint_ = endpoint; }
+  void set_cluster_id(zb_uint16_t cluster_id) { this->cluster_id_ = cluster_id; }
 
  protected:
   zb_uint8_t endpoint_{0};
+  zb_uint16_t cluster_id_{0};
   ZigbeeComponent *parent_{nullptr};
 };
 

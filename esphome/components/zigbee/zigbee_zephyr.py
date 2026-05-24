@@ -34,6 +34,11 @@ from .const import (
     zigbee_ns,
 )
 from .const_zephyr import (
+    CLUSTER_BASE_BINARY_SENSOR,
+    CLUSTER_BASE_NUMBER,
+    CLUSTER_BASE_SENSOR,
+    CLUSTER_BASE_SWITCH,
+    CLUSTER_RANGE_SIZE,
     CONF_IEEE802154_VENDOR_OUI,
     CONF_SLEEPY,
     CONF_ZIGBEE_BINARY_SENSOR,
@@ -42,12 +47,9 @@ from .const_zephyr import (
     CONF_ZIGBEE_SENSOR,
     CONF_ZIGBEE_SWITCH,
     KEY_PENDING_CLUSTERS,
+    KEY_TYPE_COUNTERS,
     ZB_ZCL_BASIC_ATTRS_EXT_T,
-    ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
-    ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
     ZB_ZCL_CLUSTER_ID_BASIC,
-    ZB_ZCL_CLUSTER_ID_BINARY_INPUT,
-    ZB_ZCL_CLUSTER_ID_BINARY_OUTPUT,
     ZB_ZCL_CLUSTER_ID_IDENTIFY,
     ZB_ZCL_IDENTIFY_ATTRS_T,
 )
@@ -267,8 +269,26 @@ def zigbee_new_cluster_list(
     return (name, all_clusters)
 
 
+def alloc_cluster_id(cluster_base: int) -> int:
+    """Allocate the next available cluster ID for a given component type.
+
+    Each component type has a 16-slot range starting at cluster_base.
+    Returns the numeric cluster ID (e.g. 0xFC01 for second binary sensor).
+    Raises cv.Invalid if the range is exhausted.
+    """
+    data: dict = CORE.data.setdefault(KEY_ZIGBEE, {})
+    counters: dict = data.setdefault(KEY_TYPE_COUNTERS, {})
+    index = counters.get(cluster_base, 0)
+    if index >= CLUSTER_RANGE_SIZE:
+        raise cv.Invalid(
+            f"Too many entities of the same type: maximum {CLUSTER_RANGE_SIZE} per type"
+        )
+    counters[cluster_base] = index + 1
+    return cluster_base + index
+
+
 def get_entity_index() -> int:
-    """Return the index (0-based) of the next entity being registered, for unique naming."""
+    """Return the total count of registered entities so far (for unique symbol naming)."""
     data: dict = CORE.data.setdefault(KEY_ZIGBEE, {})
     return len(data.get(KEY_PENDING_CLUSTERS, []))
 
@@ -353,11 +373,15 @@ async def _add_zigbee_ep(
     component_key,
     attrs_type,
     zcl_macro: str,
-    cluster_id: str,
+    cluster_base: int,
     app_device_id: str,
     extra_field_values: dict[str, int] | None = None,
 ) -> None:
-    # Use entity count as a stable index for unique C symbol names.
+    # Allocate a unique FC-range cluster ID for this entity type+instance.
+    cluster_id_int = alloc_cluster_id(cluster_base)
+    cluster_id_hex = f"0x{cluster_id_int:04X}"
+
+    # Use total entity count as a stable index for unique C symbol names.
     entity_index = get_entity_index()
 
     prefix = f"zigbee_ep1_e{entity_index}"
@@ -384,7 +408,7 @@ async def _add_zigbee_ep(
     # Accumulate cluster descriptor for the single shared endpoint.
     # The endpoint declaration itself is emitted in _ctx_to_code.
     zigbee_add_pending_cluster(
-        ZigbeeClusterDesc(cluster_id, attr_list),
+        ZigbeeClusterDesc(cluster_id_hex, attr_list),
         2,  # report_attr_count: present_value + status_flags
         app_device_id,
     )
@@ -394,22 +418,21 @@ async def _add_zigbee_ep(
     await cg.register_component(var, {})
 
     cg.add(var.set_endpoint(1))
+    cg.add(var.set_cluster_id(cluster_id_int))
     cg.add(var.set_cluster_attributes(attrs))
 
     hub = await cg.get_variable(config[CONF_ZIGBEE_ID])
     cg.add(var.set_parent(hub))
 
-bin_count = 0
+
 async def _add_binary_sensor(entity: cg.MockObj, config: ConfigType) -> None:
-    global bin_count
-    bin_count += 1
     await _add_zigbee_ep(
         entity,
         config,
         CONF_ZIGBEE_BINARY_SENSOR,
         BinaryAttrs,
         "ESPHOME_ZB_ZCL_DECLARE_BINARY_INPUT_ATTRIB_LIST",
-        f"0xFC0{bin_count:x}",
+        CLUSTER_BASE_BINARY_SENSOR,
         "ZB_HA_SIMPLE_SENSOR_DEVICE_ID",
     )
 
@@ -425,7 +448,7 @@ async def _add_sensor(entity: cg.MockObj, config: ConfigType) -> None:
         CONF_ZIGBEE_SENSOR,
         AnalogAttrs,
         "ESPHOME_ZB_ZCL_DECLARE_ANALOG_INPUT_ATTRIB_LIST",
-        ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+        CLUSTER_BASE_SENSOR,
         "ZB_HA_CUSTOM_ATTR_DEVICE_ID",
         extra_field_values={"engineering_units": bacnet_unit},
     )
@@ -438,7 +461,7 @@ async def _add_switch(entity: cg.MockObj, config: ConfigType) -> None:
         CONF_ZIGBEE_SWITCH,
         BinaryAttrs,
         "ESPHOME_ZB_ZCL_DECLARE_BINARY_OUTPUT_ATTRIB_LIST",
-        ZB_ZCL_CLUSTER_ID_BINARY_OUTPUT,
+        CLUSTER_BASE_SWITCH,
         "ZB_HA_CUSTOM_ATTR_DEVICE_ID",
     )
 
@@ -460,7 +483,7 @@ async def _add_number(
         CONF_ZIGBEE_NUMBER,
         AnalogAttrsOutput,
         "ESPHOME_ZB_ZCL_DECLARE_ANALOG_OUTPUT_ATTRIB_LIST",
-        ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
+        CLUSTER_BASE_NUMBER,
         "ZB_HA_CUSTOM_ATTR_DEVICE_ID",
         extra_field_values={
             "max_present_value": max_value,

@@ -16,10 +16,11 @@ extern "C" {
         (ZB_ZCL_NON_MANUFACTURER_SPECIFIC), (void *) (data_ptr) \
   }
 
-// copy of ZB_ZCL_DECLARE_BINARY_INPUT_ATTRIB_LIST + description
+// copy of ZB_ZCL_DECLARE_BINARY_INPUT_ATTRIB_LIST + description, adapted for
+// manufacturer-specific cluster ID (ESPHOME_CUSTOM revision).
 #define ESPHOME_ZB_ZCL_DECLARE_BINARY_INPUT_ATTRIB_LIST(attr_list, out_of_service, present_value, status_flag, \
                                                         description) \
-  ZB_ZCL_START_DECLARE_ATTRIB_LIST_CLUSTER_REVISION(attr_list, ZB_ZCL_BINARY_INPUT) \
+  ZB_ZCL_START_DECLARE_ATTRIB_LIST_CLUSTER_REVISION(attr_list, ESPHOME_CUSTOM) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_BINARY_INPUT_OUT_OF_SERVICE_ID, (out_of_service)) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_BINARY_INPUT_PRESENT_VALUE_ID, (present_value)) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_BINARY_INPUT_STATUS_FLAG_ID, (status_flag)) \

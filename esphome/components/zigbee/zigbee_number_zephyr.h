@@ -80,7 +80,7 @@ enum {
 #define ESPHOME_ZB_ZCL_DECLARE_ANALOG_OUTPUT_ATTRIB_LIST(attr_list, out_of_service, present_value, status_flag, \
                                                          max_present_value, min_present_value, resolution, \
                                                          engineering_units, description) \
-  ZB_ZCL_START_DECLARE_ATTRIB_LIST_CLUSTER_REVISION(attr_list, ZB_ZCL_ANALOG_OUTPUT) \
+  ZB_ZCL_START_DECLARE_ATTRIB_LIST_CLUSTER_REVISION(attr_list, ESPHOME_CUSTOM) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_OUT_OF_SERVICE_ID, (out_of_service)) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_PRESENT_VALUE_ID, (present_value)) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_STATUS_FLAG_ID, (status_flag)) \
@@ -90,11 +90,6 @@ enum {
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_ENGINEERING_UNITS_ID, (engineering_units)) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_DESCRIPTION_ID, (description)) \
   ZB_ZCL_FINISH_DECLARE_ATTRIB_LIST
-
-void zb_zcl_analog_output_init_server();
-void zb_zcl_analog_output_init_client();
-#define ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT_SERVER_ROLE_INIT zb_zcl_analog_output_init_server
-#define ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT_CLIENT_ROLE_INIT zb_zcl_analog_output_init_client
 
 namespace esphome::zigbee {
 

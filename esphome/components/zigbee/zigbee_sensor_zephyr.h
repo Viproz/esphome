@@ -54,18 +54,13 @@ enum {
 
 #define ESPHOME_ZB_ZCL_DECLARE_ANALOG_INPUT_ATTRIB_LIST(attr_list, out_of_service, present_value, status_flag, \
                                                         engineering_units, description) \
-  ZB_ZCL_START_DECLARE_ATTRIB_LIST_CLUSTER_REVISION(attr_list, ZB_ZCL_ANALOG_INPUT) \
+  ZB_ZCL_START_DECLARE_ATTRIB_LIST_CLUSTER_REVISION(attr_list, ESPHOME_CUSTOM) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_INPUT_OUT_OF_SERVICE_ID, (out_of_service)) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, (present_value)) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_INPUT_STATUS_FLAG_ID, (status_flag)) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_INPUT_ENGINEERING_UNITS_ID, (engineering_units)) \
   ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, (description)) \
   ZB_ZCL_FINISH_DECLARE_ATTRIB_LIST
-
-void zb_zcl_analog_input_init_server();
-void zb_zcl_analog_input_init_client();
-#define ZB_ZCL_CLUSTER_ID_ANALOG_INPUT_SERVER_ROLE_INIT zb_zcl_analog_input_init_server
-#define ZB_ZCL_CLUSTER_ID_ANALOG_INPUT_CLIENT_ROLE_INIT zb_zcl_analog_input_init_client
 
 namespace esphome::zigbee {
 

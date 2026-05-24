@@ -15,10 +15,16 @@ static const char *const TAG = "zigbee.sensor";
 ZigbeeSensor::ZigbeeSensor(sensor::Sensor *sensor) : sensor_(sensor) {}
 
 void ZigbeeSensor::setup() {
+  zb_zcl_add_cluster_handlers(this->cluster_id_, ZB_ZCL_CLUSTER_SERVER_ROLE,
+                              esphome::zigbee::check_value_analog_server,
+                              (zb_zcl_cluster_write_attr_hook_t) NULL,
+                              (zb_zcl_cluster_handler_t) NULL);
+
   this->sensor_->add_on_state_callback([this](float state) {
     this->cluster_attributes_->present_value = state;
-    ESP_LOGD(TAG, "Set attribute endpoint: %d, present_value %f", this->endpoint_, state);
-    ZB_ZCL_SET_ATTRIBUTE(this->endpoint_, ZB_ZCL_CLUSTER_ID_ANALOG_INPUT, ZB_ZCL_CLUSTER_SERVER_ROLE,
+    ESP_LOGD(TAG, "Set attribute endpoint: %d cluster: 0x%04X, present_value %f",
+             this->endpoint_, this->cluster_id_, state);
+    ZB_ZCL_SET_ATTRIBUTE(this->endpoint_, this->cluster_id_, ZB_ZCL_CLUSTER_SERVER_ROLE,
                          ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID,
                          (zb_uint8_t *) &this->cluster_attributes_->present_value, ZB_FALSE);
     this->parent_->force_report();
@@ -60,17 +66,4 @@ static zb_ret_t check_value_analog_server(zb_uint16_t attr_id, zb_uint8_t endpoi
 }
 
 }  // namespace esphome::zigbee
-
-void zb_zcl_analog_input_init_server() {
-  zb_zcl_add_cluster_handlers(ZB_ZCL_CLUSTER_ID_ANALOG_INPUT, ZB_ZCL_CLUSTER_SERVER_ROLE,
-                              esphome::zigbee::check_value_analog_server, (zb_zcl_cluster_write_attr_hook_t) NULL,
-                              (zb_zcl_cluster_handler_t) NULL);
-}
-
-void zb_zcl_analog_input_init_client() {
-  zb_zcl_add_cluster_handlers(ZB_ZCL_CLUSTER_ID_ANALOG_INPUT, ZB_ZCL_CLUSTER_CLIENT_ROLE,
-                              (zb_zcl_cluster_check_value_t) NULL, (zb_zcl_cluster_write_attr_hook_t) NULL,
-                              (zb_zcl_cluster_handler_t) NULL);
-}
-
 #endif
