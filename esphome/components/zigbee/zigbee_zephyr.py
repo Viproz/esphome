@@ -225,13 +225,21 @@ def zigbee_new_attr_list(name: str, macro: str, *args: str) -> str:
 class ZigbeeClusterDesc:
     """Represents a Zigbee cluster descriptor for code generation."""
 
-    def __init__(self, cluster_id: str, attr_list_name: str | None = None) -> None:
-        self._cluster_id = cluster_id
+    def __init__(self, cluster_id: str | int, attr_list_name: str | None = None) -> None:
+        # cluster_id may be a hex string like "0xFC00" or an int like 0xFC00.
+        # We store both: the int for the macro name, the string for ZB_ZCL_CLUSTER_DESC.
+        if isinstance(cluster_id, int):
+            self._cluster_id_int = cluster_id
+            self._cluster_id_str = f"ESPHOME_ZB_CLUSTER_{cluster_id:04X}"
+        else:
+            # Standard named cluster like "ZB_ZCL_CLUSTER_ID_BASIC" — pass through as-is.
+            self._cluster_id_int = None
+            self._cluster_id_str = cluster_id
         self._attr_list_name = attr_list_name
 
     @property
     def cluster_id(self) -> str:
-        return self._cluster_id
+        return self._cluster_id_str
 
     @property
     def has_attrs(self) -> bool:
@@ -245,8 +253,8 @@ class ZigbeeClusterDesc:
         )
         if self._attr_list_name:
             attr_count = f"ZB_ZCL_ARRAY_SIZE({self._attr_list_name}, zb_zcl_attr_t)"
-            return f"ZB_ZCL_CLUSTER_DESC({self._cluster_id}, {attr_count}, {self._attr_list_name}, {role}, ZB_ZCL_MANUF_CODE_INVALID)"
-        return f"ZB_ZCL_CLUSTER_DESC({self._cluster_id}, 0, NULL, {role}, ZB_ZCL_MANUF_CODE_INVALID)"
+            return f"ZB_ZCL_CLUSTER_DESC({self._cluster_id_str}, {attr_count}, {self._attr_list_name}, {role}, ZB_ZCL_MANUF_CODE_INVALID)"
+        return f"ZB_ZCL_CLUSTER_DESC({self._cluster_id_str}, 0, NULL, {role}, ZB_ZCL_MANUF_CODE_INVALID)"
 
 
 def zigbee_new_cluster_list(
@@ -408,7 +416,7 @@ async def _add_zigbee_ep(
     # Accumulate cluster descriptor for the single shared endpoint.
     # The endpoint declaration itself is emitted in _ctx_to_code.
     zigbee_add_pending_cluster(
-        ZigbeeClusterDesc(cluster_id_hex, attr_list),
+        ZigbeeClusterDesc(cluster_id_int, attr_list),
         2,  # report_attr_count: present_value + status_flags
         app_device_id,
     )
